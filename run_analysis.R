@@ -87,4 +87,4 @@ createTidyDatasetFile <- function(dataset_filename) {
   dataset
 }
 
-d  <- createTidyDatasetFile("tidy_dataset.txt")
+tidy_dataset  <- createTidyDatasetFile("tidy_dataset.txt")
