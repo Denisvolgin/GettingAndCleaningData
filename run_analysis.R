@@ -1,49 +1,63 @@
-# Merges the training and the test sets to create one data set.
-# Extracts only the measurements on the mean and standard deviation for each measurement.
-# Uses descriptive activity names to name the activities in the data set
-# Appropriately labels the data set with descriptive activity names.
-# Creates a second, independent tidy data set with the average of each variable for each activity and each subject.
+library(reshape2)
 
+loadTestData <- function() {
+  
+  dataColumns <- read.table("features.txt", header=F, as.is=T, col.names=c("MeasureID", "MeasureName"))
+  allData <- read.table("test/X_test.txt", header=F, col.names=dataColumns$MeasureName)
+  data <- allData[, grep(".*mean\\(\\)|.*std\\(\\)", dataColumns$MeasureName)]
 
-#1. Merge the training and the test sets to create one data set.
-#Load variable names
-activity.recognition.labels <- read.table('./UCI HAR Dataset/activity_labels.txt')
-activity.recognition.features <- read.table('./UCI HAR Dataset/features.txt')[, 2]
+  y_data <- read.table("test/y_test.txt", header=F, col.names=c("ActivityID"))
+  data$ActivityID <- y_data$ActivityID
+  
+  subjectData <- read.table("test/subject_test.txt", header=F, col.names=c("SubjectID"))
+  data$SubjectID <- subjectData$SubjectID
+  
+  return(data)
+}
 
-#Load trainig data sets
-training.dataset.subject <- read.table('./UCI HAR Dataset/train/subject_train.txt')
-training.dataset.x <- read.table('./UCI HAR Dataset/train/X_train.txt')
-training.dataset.y <- read.table('./UCI HAR Dataset/train/y_train.txt')
+loadTrainingData <- function() {
+  
+  dataColumns <- read.table("features.txt", header=F, as.is=T, col.names=c("MeasureID", "MeasureName"))
+  allData <- read.table("train/X_train.txt", header=F, col.names=dataColumns$MeasureName)
+  data <- allData[, grep(".*mean\\(\\)|.*std\\(\\)", dataColumns$MeasureName)]
+  
+  y_data <- read.table("train/y_train.txt", header=F, col.names=c("ActivityID"))
+  data$ActivityID <- y_data$ActivityID
+  
+  subjectData <- read.table("train/subject_train.txt", header=F, col.names=c("SubjectID"))
+  data$SubjectID <- subjectData$SubjectID
+  
+  return(data)
+}
 
+tidyUpData <- function() {
+  
+  #merge test and training data
+  data <- rbind(readTestData(), readTrainData())
+  
+  #fix the non-standard column names
+  columnNames <- colnames(data)
+  columnNames <- gsub("\\.+mean\\.+", cnames, replacement="Mean")
+  columnNames <- gsub("\\.+std\\.+", cnames, replacement="Std")
+  colnames(data) <- columnNames
+  
+  #add the activity name column
+  activityLabels <- read.table("activity_labels.txt", header=F, as.is=T, col.names=c("ActivityID", "ActivityName"))
+  activityLabels$ActivityName <- as.factor(activityLabels$ActivityName)
+  mergedAndlabeledData <- merge(data, activityLabels)
+  
+  # melt the dataset
+  activityAndSubjectVariables = c("ActivityID", "ActivityName", "SubjectID")
+  measureVariables = setdiff(colnames(mergedAndlabeledData), activityAndSubjectVariables)
+  tidyData <- melt(mergedAndlabeledData, id=activityAndSubjectVariables, measure.vars=measureVariables)
+  
+  # recast
+  dcast(tidyData, ActivityName + SubjectID ~ variable, mean)
+}
 
-#Load test data sets
-test.dataset.subject <- read.table('./UCI HAR Dataset/test/subject_test.txt')
-test.dataset.x <- read.table('./UCI HAR Dataset/test/X_test.txt')
-test.dataset.y <- read.table('./UCI HAR Dataset/test/y_test.txt')
+# Create the tidy data set and save it on to the named file
+saveTidyData <- function(tidyDataFileName) {
+  write.table(tidyUpData(), tidyDataFileName)
+}
 
-
-#Merge the data sets
-dataset.x <- rbind(training.dataset.x, test.dataset.x)
-dataset.y <- rbind(training.dataset.y, test.dataset.y)
-dataset.subject <- rbind(training.dataset.subject, test.dataset.subject)
-
-## set descriptive activity names
-colnames(dataset.x) <- activity.recognition.features
-colnames(dataset.y) <- "activityId"
-colnames(dataset.subject) <- "subject"
-
-#Requirement 2: Extracts only the measurements on the mean and standard deviation for each measurement.
-dataset.x.meansAndStandardDeviationsOnly =
-  dataset.x[, grep("-mean\\(\\)|-std\\(\\)", activity.recognition.features, value=TRUE)]
-
-#Requirement 3: Uses descriptive activity names to name the activities in the data set
-colnames(activity.recognition.labels) <- c("activityId", "activity")
-
-#Requirement 4: Appropriately labels the data set with descriptive activity names.
-# join the activity with descriptive names
-dataset.y.withActivityLabels <- merge(dataset.y, activity.recognition.labels)
-# join measurements dataset with activity labels
-dataset.x.meansAndStandardDeviationsOnly.withActivityLabels <-
-  cbind(dataset.x.meansAndStandardDeviationsOnly, dataset.y.withActivityLabels["activity"]) 
-
-write.csv(dataset.x.meansAndStandardDeviationsOnly.withActivityLabels, "activity_recognition_means_and_stddevs.txt")
+createTidyDataFile("tidy.txt")
